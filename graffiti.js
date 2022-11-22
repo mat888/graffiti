@@ -24,6 +24,10 @@ class Graffiti extends ModTemplate {
 
     app.keys.addKey( this.appPubKey , {watched: true});
 
+    //
+    // we want full blocks
+    //
+    app.SPVMODE = 0;
 
     console.log("end of Graffiti constructor");
       
