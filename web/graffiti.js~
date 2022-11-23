@@ -62,7 +62,7 @@ function getSQL(app) {
 
 function makeSQL(app) {
     console.log("makeSQL");
-    let sql = `INSERT OR IGNORE INTO cells (
+    let sql = `INSERT OR IGNORE INTO games (
                test_1 ,
                test_2
              ) VALUES (
