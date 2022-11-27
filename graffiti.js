@@ -39,14 +39,14 @@ function getCellCoords(canvas, event, cellSize) {
     return coords;
     }
 
-function getSQL(app) {
+function getSQL_dep(app) {
     console.log("in getSQL");
     let mymod = app.modules.returnModule("Graffiti");
     console.log("in getSQL 2");
-    let sql = `SELECT * FROM cells`;
+    let sql = `SELECT * FROM cells;`;
     console.log(sql);
     console.log("in getSQL 3");
-    mymod.sendPeerDatabaseRequestWithFilter("Graffiti", sql, async (res) => {
+    mymod.sendPeerDatabaseRequest("Graffiti", sql, (res) => {
 	console.log("in getSQL 4");
 	console.log(res.rows);
         if (res.rows) {
@@ -60,7 +60,19 @@ function getSQL(app) {
     });
 }
 
-function makeSQL(app) {
+function getSQL(app) {
+    console.log("in getSQL");
+    let mymod = app.modules.returnModule("Graffiti");
+    console.log("in getSQL 2");
+    let sql = `SELECT * FROM cells;`;
+    console.log(sql);
+    console.log("in getSQL 3");
+    let sql_resp = mymod.sendPeerDatabaseRequest("Graffiti", sql);
+    console.log(sql_resp);
+    console.log("in getSQL 4");
+}
+
+async function makeSQL(app) {
     console.log("makeSQL");
     let sql = `INSERT OR IGNORE INTO cells (
                test_1 ,
@@ -71,9 +83,9 @@ function makeSQL(app) {
              )`;
     let params = {
 	$test_1: "this is test_1 data",
-	$test_2: "this is test_2 data"
+	$test_2: "this is test_2 data",
     };
-    app.storage.executeDatabase(sql, params, "Graffiti");
+    await app.storage.executeDatabase(sql, params, "graffiti");
 }
 
 class Graffiti extends ModTemplate {
