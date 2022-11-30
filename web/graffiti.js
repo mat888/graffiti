@@ -1,35 +1,34 @@
 // TODO:
-//
-// when onConforimation draws a cell currently hovered over,
+
+// when onconforimation draws a cell currently hovered over,
 // it believes the rightful old color is the pending (lighter color)
-//
+
 // pending white color is white - therefore unclear
-//
+
 // zoom breaks - canvas position is not tracked correctly after zoom
-//
+
 // 
+
 var saito = require('../../lib/saito/saito');
 var ModTemplate = require('../../lib/templates/modtemplate');
 const GraffitiAppspaceMain = require('./lib/appspace/main');
 
-//
+
+
 // These two functions read canvas pixel data and return a HEX color
-//
 function getPixel(context, x, y) {
     var p = context.getImageData(x+5, y+5, 1, 1).data;
     var hex = "#" + ("000000" + rgbToHex(p[0], p[1], p[2])).slice(-6);  
     return hex;
 }
 function rgbToHex(r, g, b) {
-    if (r > 255 || g > 255 || b > 255) {
-      throw "Invalid color component";
-    }
+    if (r > 255 || g > 255 || b > 255)
+        throw "Invalid color component";
     return ((r << 16) | (g << 8) | b).toString(16);
 }
 
-//
-// given any point on the canvas, find the coordinates of the CELL those coordinates reside within
-//
+// given any point on the canvas, find the coordinates of
+// the CELL those coordinates reside within
 function getCellCoords(canvas, event, cellSize) {
     let rect   = canvas.getBoundingClientRect();
     let coords = [event.clientX - rect.left,
@@ -38,8 +37,44 @@ function getCellCoords(canvas, event, cellSize) {
     coords = coords.map(t => Math.floor(t));
     coords = coords.map(t => t - (t % cellSize));
     return coords;
+    }
+
+function getSQL(app) {
+    console.log("in getSQL");
+    let mymod = app.modules.returnModule("Graffiti");
+    console.log("in getSQL 2");
+    let sql = `SELECT * FROM cells`;
+    console.log(sql);
+    console.log("in getSQL 3");
+    mymod.sendPeerDatabaseRequestWithFilter("Graffiti", sql, async (res) => {
+	console.log("in getSQL 4");
+	console.log(res.rows);
+        if (res.rows) {
+	    res.rows.map((row) => {
+		// each row here
+		// row.status
+		// row.id 
+                console.log((JSON.parse(row.tx)));
+            });
+        }
+    });
 }
 
+function makeSQL(app) {
+    console.log("makeSQL");
+    let sql = `INSERT OR IGNORE INTO cells (
+               test_1 ,
+               test_2
+             ) VALUES (
+               $test_1 ,
+               $test_2
+             )`;
+    let params = {
+	$test_1: "this is test_1 data",
+	$test_2: "this is test_2 data"
+    };
+    app.storage.executeDatabase(sql, params, "Graffiti");
+}
 
 class Graffiti extends ModTemplate {
 
@@ -69,158 +104,25 @@ class Graffiti extends ModTemplate {
 	return this;
     }
 
-
-    //
-    // this just writes the content to the DOM
-    //
     initializeHTML(app) {
-
 	console.log("initializing html...");
-
+	makeSQL(app);
+	getSQL(app);
+	console.log("past sql ..........................................");
 	// (cellSize (in pixels), cellsWide, cellsTall);
-
-	//
-	// we do not have any information from any other machine at this point
-	//
-        // we can cache materials between loads if we want by writing to the 
-	// "options" file or wallet. i.e.
-	//
-	// app.options.graffiti = {};
-	//
-	// and then saving it with
-	//
-	// app.storage.saveOptions();
-	//
- 	// any data put here will persist between loads, and can be loaded
-	// here in initializeHTML if you want.
-	//
 	this.initializeCanvas(30, 30, 30);
+
+	// draw from full node's currentCells to get up to date
+	console.log("this.currentCells:");
+	console.log(this.currentCells);
 	for (const [key, value] of Object.entries(this.currentCells)) {
 	    console.log(key, value);
 	    this.drawCell(key["coords"], value);
 	}
-
     }
     
-    //
-    // once peers are online, we can load content (after DOM rendered)
-    //
-    onPeerHandshakeComplete(app, peer) {
-
-      let sql = `SELECT * FROM cells;`;
-      this.sendPeerDatabaseRequest("Graffiti", sql, (res) => {
-        console.log("ROWS: " + res.rows);
-        if (res.rows) {
-            res.rows.map((row) => {
-                //
-		// each row here
-                //
-                console.log((JSON.parse(row)));
-            });
-        }
-      });
-
-    }
-
-
-
-    //
-    // Browser
-    // fill in cells with recieved color + coord data
-    //
-    // Full Node
-    // TODO: save current state of canvas to catch new lite clients up
-    //
-    async onConfirmation(blk, tx, conf, app) {
-
-	if (conf == 0) {
-
-	    //
-	    // save to database
-	    //
-	    this.receiveQueueTransaction(tx);
-
-
-	    //
-	    // you draw stuff here, why not move into above function?
-	    //
-	    let txmsg = tx.returnMessage();
-	    let queue = txmsg.cells;
-	    let mymod = app.modules.returnModule("Graffiti");
-
-	    //
-	    // then draw
-	    //
-	    // TODO - check if coords and color are valid before saving or drawing
-	    //
-	    for (let i = 0; i < queue.length; i++) {
-
-		// full node
-		if (app.BROWSER == 0) {
-		    mymod.currentCells[ {"coords": [coords]} ] = color;
-		}
-		// lite node
-		else {
-		    let coords = queue[i][0];
-		    let color  = queue[i][1];
-		    mymod.drawCell(coords, color);
-		}
-	    }
-	}
-    }
-
-
-
-    //
-    // send the transaction on-chain
-    //
-    sendQueueTransaction() {
-
-	let newtx = this.app.wallet.createUnsignedTransaction(this.appPubKey);
-	newtx.msg.module = "Graffiti";
-	newtx.msg.cells = this.queue;
-	newtx = this.app.wallet.signTransaction(newtx);
-	this.app.network.propagateTransaction(newtx);
-
-    }
-
-    //
-    // and receive it !
-    //
-    // this will run on the server and on any lite-clients that are also listening
-    // for the graffiti transactions. but the lite-clients probably do not have a 
-    // database running and so will be running "empty" functions when they try to
-    // insert into DB.
-    //
-    async receiveQueueTransaction(tx) {
-
-	//
-	// insert into database !
-	//
-        console.log("makeSQL");
-        let sql = `INSERT OR IGNORE INTO cells (
-          test_1 ,
-          test_2
-        ) VALUES (
-          $test_1 ,
-          $test_2
-        )`;
-        let params = {
-          $test_1: "this is test_1 data",
-          $test_2: "this is test_2 data",
-        };
-        await this.app.storage.executeDatabase(sql, params, "graffiti");
-
-    }
-
-
-
-
-    //
-    // NOTE: this runs immediately after initializeHTML, but before the network is up!
-    //
     attachEvents(app, mod) {
-
+	
 	let mymod = app.modules.returnModule("Graffiti");
   	let canvas = mymod.canvas;
 	let ctx = canvas.getContext('2d');
@@ -245,7 +147,7 @@ class Graffiti extends ModTemplate {
 
 	document.onmouseup = (e) => {
 	    // send queue generated by dragging mouse
-	    mymod.sendQueueTransaction();
+	    mymod.sendQueue(app);
 	    
 	    if (e.which === 1) {mymod.leftButtonDown = false}
 	}
@@ -303,21 +205,59 @@ class Graffiti extends ModTemplate {
 
     }
 
-
-    //
-    // this doesn't do much, it's more for use-cases where people are playing games
-    // and their connection flicks off and then comes back and you want to have them
-    // do things like rebroadcast any moves, etc.
-    //
-    // i would suggest deleting the function until you need something here.
-    //
     onConnectionStable(app, peer) {
 	console.log("Connection Stable");
 	let mymod = app.modules.returnModule("Graffiti");
 	console.log(mymod.currentCells);
     }
     
+    // Browser
+    // fill in cells with recieved color + coord data
+    //
+    // Full Node
+    // TODO: save current state of canvas to catch new lite clients up
+    //
+    async onConfirmation(blk, tx, conf, app) {
+//	if (app.BROWSER == 0) { return; }
 
+	if (conf == 0) {
+
+	    let txmsg = tx.returnMessage();
+	    let queue = txmsg.cells;
+	    let mymod = app.modules.returnModule("Graffiti");
+
+	    // TODO
+	    // check if coords and color are valid before saving or drawing
+
+	    for (let i = 0; i < queue.length; i++) {
+
+		// full node
+		if (app.BROWSER == 0) {
+		    mymod.currentCells[ {"coords": [coords]} ] = color;
+
+		}
+		// lite node
+		else {
+		    let coords = queue[i][0];
+		    let color  = queue[i][1];
+		    mymod.drawCell(coords, color);
+		}
+
+	    }
+	}
+    }
+
+    /*
+    // get info and update page in here
+    async onConfirmation(blk, tx, conf, app) {
+
+    //    let mymod = app.modules.returnModule(txmsg.module);
+    //    if (mymod.browser_active == 0) {return;}
+
+    attachEventsEmail(app, mod) {
+    Console.log("attaching events");
+    }
+    */
 
     initializeCanvas(cellSize, cellsWide, cellsTall) {
 	document.body.appendChild(document.createElement('canvas'));
@@ -377,8 +317,15 @@ class Graffiti extends ModTemplate {
 	return semiColor;
     }
 
-
-
+    sendQueue(app) {
+	// send data to chain
+	let newtx = app.wallet.createUnsignedTransaction(this.appPubKey);
+	
+	newtx.msg.module = "Graffiti";
+	newtx.msg.cells = this.queue;
+	newtx = app.wallet.signTransaction(newtx);
+	app.network.propagateTransaction(newtx);
+    }
 
     drawCell(coords, color) {
 	let ctx = this.canvas.getContext('2d');
@@ -433,7 +380,7 @@ class Graffiti extends ModTemplate {
 		//
 		if (tapped) {
 		    // then send the queue (single coord+color combo)
-		    mymod.sendQueueTransaction();
+		    mymod.sendQueue(app);
 		}
 		// 
 		// otherwise the queue is sent when mouse is dragged
@@ -460,4 +407,3 @@ class Graffiti extends ModTemplate {
 
 
 module.exports = Graffiti;
-
