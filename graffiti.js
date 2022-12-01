@@ -96,8 +96,7 @@ class Graffiti extends ModTemplate {
     onPeerHandshakeComplete(app) {
 	console.log("sql data: ");
 	let sql = `SELECT * FROM tiles;`;
-	this.sendPeerDatabaseRequest("Graffiti", sql, (res) => {
-	    console.log(rows);
+	this.sendPeerDatabaseRequest("graffiti", sql, (res) => {
             console.log("ROWS: " + res.rows);
             if (res.rows) {
 		res.rows.map((row) => {
