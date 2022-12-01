@@ -97,7 +97,6 @@ class Graffiti extends ModTemplate {
 	console.log("sql data: ");
 	let sql = `SELECT * FROM tiles;`;
 	this.sendPeerDatabaseRequest("Graffiti", sql, (res) => {
-	    console.log(rows);
             console.log("ROWS: " + res.rows);
             if (res.rows) {
 		res.rows.map((row) => {
