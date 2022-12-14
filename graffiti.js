@@ -76,6 +76,8 @@ class Graffiti extends ModTemplate {
     initializeHTML(app) {
 	console.log("initializing html...");
 
+	super.initialize(app);
+
 	// (cellSize (in pixels), cellsWide, cellsTall);
 	this.initializeCanvas(30, 30, 30);
 
@@ -91,19 +93,18 @@ class Graffiti extends ModTemplate {
 	}
     }
 
-
-
     onPeerHandshakeComplete(app) {
 	console.log("sql data: ");
 	let sql = `SELECT * FROM tiles;`;
-	this.sendPeerDatabaseRequest("graffiti", sql, (res) => {
-            console.log("ROWS: " + res.rows);
+	this.sendPeerDatabaseRequest("Graffiti", "peer", sql, (res) => {
+	    super.initialize(app);
+            console.log("ROWS: " + res.rows)
             if (res.rows) {
 		res.rows.map((row) => {
                     //
 		    // each row here
                     //
-                    console.log((JSON.parse(row)));
+                    console.log((JSON.parse(row)))
 		});
             }
 	});
