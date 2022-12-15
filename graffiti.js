@@ -70,13 +70,15 @@ class Graffiti extends ModTemplate {
 	this.categories  = "Dev Utilities";
 
 	app.keys.addKey( this.appPubKey , {watched: true});
+
+//	super.initialize(app);
 	return this;
     }
 
     initializeHTML(app) {
 	console.log("initializing html...");
 
-	super.initialize(app);
+//	super.initialize(app);
 
 	// (cellSize (in pixels), cellsWide, cellsTall);
 	this.initializeCanvas(30, 30, 30);
@@ -94,10 +96,11 @@ class Graffiti extends ModTemplate {
     }
 
     onPeerHandshakeComplete(app) {
+	super.initialize(app);
 	console.log("sql data: ");
 	let sql = `SELECT * FROM tiles;`;
-	this.sendPeerDatabaseRequest("Graffiti", "peer", sql, (res) => {
-	    super.initialize(app);
+	this.sendPeerDatabaseRequest("Graffiti", sql, (res) => {
+	    console.log("in database request");
             console.log("ROWS: " + res.rows)
             if (res.rows) {
 		res.rows.map((row) => {
