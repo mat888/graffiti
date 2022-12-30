@@ -30,7 +30,7 @@
   <body>
 
     <label for="favcolor">Select your favorite color:</label>
-    <input type="color" id="favcolor" name="favcolor" value="#f71f3d"> 
+    <input type="color" id="favcolor" name="favcolor" value="#ff0000"> 
 
     <!-- saito load animation -->
     <script src="/saito/lib/lottie/lottie_light.min.js"></script>

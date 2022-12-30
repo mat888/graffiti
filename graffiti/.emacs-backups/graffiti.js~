@@ -79,7 +79,12 @@ class Graffiti extends ModTemplate {
 	// (cellSize (in pixels), cellsWide, cellsTall);
 	this.initializeCanvas(40, 18, 40);
 
-	// This is how the browser gets up to date canvas from node on startup
+	// This is where browser should get up to date canvas from node
+
+	// draw from full node's currentTiles to get up to date
+
+	// this doesn't work because it uses the browser currentTiles
+	// not the node's currentTiles
 	for (const [key, value] of Object.entries(this.currentTiles)) {
 	    console.log(key, value);
 	    this.drawTile(key["coords"], value, app);
@@ -118,44 +123,9 @@ class Graffiti extends ModTemplate {
 	    }
 	}
     }
+
     async onConfirmation(blk, tx, conf, app) {
 	if (conf > 0) { return; }
-	//	this.receiveQueueTx(tx);
-	
-	let txmsg = tx.returnMessage();
-	let queue = txmsg.tiles;
-	let mymod = app.modules.returnModule("Graffiti");
-	
-	// TODO
-	// check if coords and color are valid before saving or drawing
-	for (let i = 0; i < queue.length; i++) {
-	    let coords = queue[i][0];
-	    let color  = queue[i][1];
-	    
-	    // update tiles dictionary
-	    mymod.currentTiles[String(coords)] = color;
-	    
-	    // full node
-	    if (app.BROWSER == 0) {
-		// sql handling
-		this.receiveQueueTx(queue[i]);
-	    }
-	    // lite node
-	    else {
-		console.log("about to draw in browser");
-		mymod.drawTile(coords, color, app);
-		//
-		if (mymod.lastHover) {
-		    if (String(mymod.lastHover["coords"]) == String(coords)) {
-			console.log("changing lastHover");
-			mymod.lastHover["color"] = color;
-		    }
-		}
-	    }
-	}
-    }
-    async onNewBlock(blk, lc) {
-	if (!lc) { return; }
 	//	this.receiveQueueTx(tx);
 	
 	let txmsg = tx.returnMessage();
