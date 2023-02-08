@@ -2,13 +2,15 @@
 
 // pending white color is white - therefore unclear
 
-// zoom breaks - canvas position is not tracked correctly after zoom
+// moving image left,right,up,down while holding paint button down may be glitchy
 
+// don't use keydown to check if heys are held, do it manually
+
+// remove any subpixel scaling on zoom ? 
 
 var saito = require('../../lib/saito/saito');
 var ModTemplate = require('../../lib/templates/modtemplate');
 const GraffitiAppspaceMain = require('./lib/appspace/main');
-
 
 
 // These two functions read canvas pixel data and return a HEX color
@@ -31,16 +33,23 @@ function tooWhite(color) {
 
 // given any point on the canvas, find the coordinates of
 // the tile those coordinates reside within
-function getTileCoords(canvas, event, cellSize) {
+function getTileCoords(canvas, event, cellSize, zoom) {
     let rect   = canvas.getBoundingClientRect();
-    let coords = [event.clientX - rect.left,
-		  event.clientY - rect.top]
+//    let coords = [(event.clientX - rect.left) / zoom,
+//		  (event.clientY - rect.top)  / zoom]
     // transform real numbered coords into top left corner of cell those coords reside in
+    let coords = [(event[0] - rect.left) / zoom,
+		  (event[1] - rect.top ) / zoom];
+    let cell_sz = cellSize * zoom;
     coords = coords.map(t => Math.floor(t));
     coords = coords.map(t => t - (t % cellSize));
     return coords;
-    }
+    
+//    coords = coords.map(t => t / zoom);
+//    coords = coords.map(t => Math.floor(t));
 
+//    return coords;
+    }
 
 class Graffiti extends ModTemplate {
 
@@ -48,21 +57,33 @@ class Graffiti extends ModTemplate {
 	super(app);
 	super.initialize(app);
 	
-	this.app            = app;
-	this.name           = "Graffiti";
-	this.appname        = "Graffiti";
-	this.appPubKey      = "zEC6dxU9P1LFsHpc3BANqaPdRu4njmqbouCqgRQwFa6J"
-	this.description    = "Email plugin that allows visual exploration and debugging of the Saito wallet.";
-	this.categories     = "Utilities Core";
-	this.icon	    = "fas fa-code";
+	this.app         = app;
+	this.name        = "Graffiti";
+	this.appname     = "Graffiti";
+	this.appPubKey   = "zEC6dxU9P1LFsHpc3BANqaPdRu4njmqbouCqgRQwFa6J"
+	this.description = "Graffiti description"
+	this.categories  = "Utilities Core";
+	this.icon	 = "fas fa-code";
 	
-	this.canvas         = "UNSET CANVAS";
+	this.canvas         = null;
+	this.ctx            = null;
 	this.cellSize       = 10;
-	this.lastHover      = null;
 	this.leftButtonDown = false;
+	this.mouseCoords    = [0,0];
 
-	this.queue = [];
+	this.moveLeft  = false;
+	this.moveUp    = false;
+	this.moveright = false;
+	this.moveDown  = false;
+	
+	this.zoom_factor        = 30;
+	this.canvas_offset      = [0,0];
+
+	this.queue        = [];
 	this.currentTiles = {};
+	this.reDrawing = false;
+
+	this.renderQueue  = [];
 	
 	this.description = "A debug configuration dump for Saito";
 	this.categories  = "Dev Utilities";
@@ -76,15 +97,153 @@ class Graffiti extends ModTemplate {
     initializeHTML(app) {
 	console.log("initializing html...");
 
-	// (cellSize (in pixels), cellsWide, cellsTall);
-	this.initializeCanvas(40, 18, 40);
+	this.initializeCanvas(1200, 1200);
 
 	// This is how the browser gets up to date canvas from node on startup
 	for (const [key, value] of Object.entries(this.currentTiles)) {
 	    console.log(key, value);
 	    this.drawTile(key["coords"], value, app);
 	}
+	for (var i = 1; i < 2; i++) {
+	    setTimeout(function timer() {
+		let mymod = app.modules.returnModule("Graffiti");
+		console.log(mymod.moveUp);
+	    }, i * 3000);
+	}
+	
+
+	//////////////////////////////////////////////////////////////////////////////
+	// HTML EVENTS ///////////////////////////////////////////////////////////////
+
+	let mymod = app.modules.returnModule("Graffiti");
+	
+	// RESIZE EVENT	
+	window.onresize = function resize() {
+	    
+	    mymod.canvas.width = Math.floor(window.innerWidth * 0.5);
+	    mymod.canvas.height = Math.floor(window.innerHeight * 0.5);
+	    
+	    mymod.reDraw();
+	}
+	
+	// MOUSEMOVE EVENT
+	this.canvas.addEventListener("mousemove", function (e) {
+	    mymod.mouseCoords = [e.clientX - mymod.canvas.offsetLeft,
+				 e.clientY - mymod.canvas.offsetTop]
+	});
+
+	// CLICK EVENT
+	this.canvas.addEventListener("click", function (e) {
+	    let c = mymod.get_tile_corner(mymod.mouseCoords[0], mymod.mouseCoords[1]);
+
+	    var coords = c
+	    var color =  "#00ff00";
+	    var tile_coords = coords.map(t => Math.floor(t / mymod.zoom_factor));
+	    mymod.currentTiles[tile_coords] = color;
+	    var ctx = mymod.ctx;
+	    ctx.fillStyle = color;
+	    ctx.fillRect(coords[0], coords[1], mymod.zoom_factor, mymod.zoom_factor);
+	    
+	    console.log(c);
+	    console.log(mymod.zoom_factor);
+	    console.log(tile_coords);
+	    console.log(mymod.currentTiles);
+	});
+
+	document.addEventListener("wheel", function (e) {
+	    if (e.deltaY < 0) {
+		mymod.zoom_factor++;
+	    }
+	    else {
+		mymod.zoom_factor--;
+	    }
+	    mymod.reDraw();
+	});
+
+	// END HTML EVENTS ////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////
+	
+	
+	this.canvas_loop();
+	
     }
+
+    get_tile_corner(x, y) {
+	var x_t = Math.floor((x - this.canvas_offset[0]) / this.zoom_factor);
+	var y_t = Math.floor((y - this.canvas_offset[1]) / this.zoom_factor);
+
+//	return [x_t, y_t];
+
+	var coords = [x, y];
+	coords = coords.map(t => t - (t % this.zoom_factor));
+
+	return coords;
+    }
+    
+    canvas_loop() {
+
+	// function which takes:
+	//  scale
+	//  offset
+	//  position
+
+	// and repaints within a constant sized canvas the cells
+
+
+	// this should be done outside this loop function
+	
+	let ctx = this.ctx;
+
+	// if entire canvas must be redraw, clear it first
+	if (this.reDrawing) {
+	    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+	}
+	console.log(renderQueue);
+	for (var i = 0; i < this.renderQueue.length; i++) {
+	    var coords = this.renderQueue[i][0].map(t => t * this.zoom_factor);
+	    var color =  this.renderQueue[i][1];
+	    ctx.fillStyle = color;
+	    ctx.fillRect(coords[0], coords[1], this.tileSize, this.tileSize);
+	}
+
+	
+	this.reDrawing = false;
+	this.renderQueue = [];
+
+	requestAnimationFrame(()=>this.canvas_loop());
+    }
+
+    // 
+    reDraw() {
+	this.reDrawing = true;
+	this.renderQueue = [];
+
+	// TODO
+	// width and height are computed for all redraw events including:
+	// * zooming in and out
+	// * resizing window
+	// * shifting canvas coords
+	//  but it only needs to be computed when resizing window (or cnv size changes)
+	let width  = Math.ceil(this.canvas.width  / this.zoom_factor);
+	let height = Math.ceil(this.canvas.height / this.zoom_factor);
+	//
+	
+	for (var i = 0; i++; i <= width) {
+	    for (var j = 0; j++; j <=height) {
+		this.renderQueue.push([i,j]);
+	    }
+	}
+    }
+
+    draw_tile(coords, color="#ffffff") {
+	let x_offset = this.canvas_offeset[0];
+	let y_offset = this.canvas_offeset[1];
+	ctx.fillStyle = color;
+	ctx.fillRect(coords[0] - x_offset, coords[1] - y_offset, this.zoomFactor, this.zoomFactor);
+	//
+    }
+
+
 
     onPeerHandshakeComplete(app) {
 	let mymod = app.modules.returnModule("Graffiti");
@@ -102,12 +261,6 @@ class Graffiti extends ModTemplate {
 		    color  = row["color"];
 		    mymod.drawTile(coords, color, app);
 		    mymod.currentTiles[coords] = color;
-		    if (mymod.lastHover && false) {
-			if (String(mymod.lastHover["coords"]) == String(coords)) {
-			    console.log("changing lastHover");
-			    mymod.lastHover["color"] = color;
-			}
-		    }
 		});
             }
 	});
@@ -143,54 +296,13 @@ class Graffiti extends ModTemplate {
 	    // lite node
 	    else {
 		console.log("about to draw in browser");
-		mymod.drawTile(coords, color, app);
-		//
-		if (mymod.lastHover) {
-		    if (String(mymod.lastHover["coords"]) == String(coords)) {
-			console.log("changing lastHover");
-			mymod.lastHover["color"] = color;
-		    }
-		}
-	    }
-	}
-    }
-    async onNewBlock(blk, lc) {
-	if (!lc) { return; }
-	//	this.receiveQueueTx(tx);
-	
-	let txmsg = tx.returnMessage();
-	let queue = txmsg.tiles;
-	let mymod = app.modules.returnModule("Graffiti");
-	
-	// TODO
-	// check if coords and color are valid before saving or drawing
-	for (let i = 0; i < queue.length; i++) {
-	    let coords = queue[i][0];
-	    let color  = queue[i][1];
-	    
-	    // update tiles dictionary
-	    mymod.currentTiles[String(coords)] = color;
-	    
-	    // full node
-	    if (app.BROWSER == 0) {
-		// sql handling
-		this.receiveQueueTx(queue[i]);
-	    }
-	    // lite node
-	    else {
-		console.log("about to draw in browser");
-		mymod.drawTile(coords, color, app);
-		//
-		if (mymod.lastHover) {
-		    if (String(mymod.lastHover["coords"]) == String(coords)) {
-			console.log("changing lastHover");
-			mymod.lastHover["color"] = color;
-		    }
-		}
-	    }
-	}
-    }
 
+		// only do this (queue to render) if tile is in frame
+		mymod.drawTile(coords, color, app);
+		//
+	    }
+	}
+    }
 
     //
     // send queue of tiles to be drawn on-chain
@@ -218,7 +330,7 @@ class Graffiti extends ModTemplate {
 	let coords = JSON.stringify(tile[0]);
 	let color  = tile[1];
 	//
-	// insert into database !
+	// insert into database | overwrite existing tiles
 	//
 	let sql = `REPLACE INTO tiles (
           coords,
@@ -234,24 +346,91 @@ class Graffiti extends ModTemplate {
         await this.app.storage.executeDatabase(sql, params, "graffiti");
 	
     }
-    
 
+    transformElement() {
+	
+	this.translate[0] = this.unscaled_translate[0] + (this.center[0] / this.scale);
+	this.translate[1] = this.unscaled_translate[1] + (this.center[1] / this.scale);
+
+	let x_str = String(this.translate[0]) + "px,";
+	let y_str = String(this.translate[1]) + "px)";
+
+	let t   = "translate(" + x_str + y_str;
+	let s = "scale(" + this.scale + ") " + t;
+
+	this.canvas.style.transform = s;
+    }
     
     attachEvents(app, mod) {
-	
+
 	let mymod = app.modules.returnModule("Graffiti");
   	let canvas = mymod.canvas;
-	let ctx = canvas.getContext('2d');
+	let ctx = mymod.ctx;
+//	const width = canvas.width;
+//	const height = canvas.height;
 
-	let zoom = 1;
-	const ZOOM_SPEED = 0.1;
-	
-	canvas.addEventListener("wheel", function (e) {
-	    if (e.deltaY > 0) {
-		mymod.canvas.style.transform = `scale(${(zoom += ZOOM_SPEED)})`;
-	    } else {
-		mymod.canvas.style.transform = `scale(${(zoom -= ZOOM_SPEED)})`;
+	const zoom_speed = 1.1;
+
+
+
+	document.addEventListener("wheel", function (e) {
+	    if (e.deltaY < 0) {
+		mymod.zoom_factor++;
 	    }
+	    else {
+		mymod.zoom_factor--;
+	    }
+	    
+	});
+	let shift = 40;
+	let dirKeys = {"s":0, // up
+		       "d":1, // right
+		       "x":2, // down 
+		       "a":3};// left
+
+	function l(m) {console.log(m)};
+	document.addEventListener("keydown", (e) => {
+	    switch(dirKeys[e.key]) {
+	    case 0:
+		mymod.unscaled_translate[1] += shift;
+		mymod.moveUp = true;
+		break;
+	    case 2:
+		mymod.unscaled_translate[1] -= shift;
+		mymod.moveDown = true;
+		break;
+	    case 3:
+		mymod.unscaled_translate[0] += shift;
+		mymod.moveLeft = true;
+		break;
+	    case 1:
+		mymod.unscaled_translate[0] -= shift;
+		mymod.moveRight = true;
+	break;
+	    }
+
+	});
+
+	document.addEventListener("keyup", (e) => {
+	    switch(dirKeys[e.key]) {
+	    case 0:
+		console.log("key up: ", e.key, dirKeys[e.key]);
+		mymod.moveUp = false;
+		break;
+	    case 2:
+		console.log("key up: ", e.key, dirKeys[e.key]);
+		mymod.moveDown = false
+		break;
+	    case 3:
+		console.log("key up: ", e.key, dirKeys[e.key]);
+		mymod.moveLeft = false;
+		break;
+	    case 1:
+		console.log("key up: ", e.key, dirKeys[e.key]);
+		mymod.moveRight = false;
+	break;
+	    }
+
 	});
 
 	//
@@ -272,74 +451,44 @@ class Graffiti extends ModTemplate {
 	//
 	// initiate color preview when hovering over cell
 	//
-	canvas.onmouseover = (e) => {
-	    //
-	    // save the color of the cell the cursor hovers over
-	    // as it enters the canvas
-	    //
-	    let coords = getTileCoords(mymod.canvas, e, mymod.tileSize)
-	    let color  = document.getElementById("favcolor").value;
-	    mymod.lastHover = {'coords': coords,
-			       'color' : mymod.getColor(coords)
-			      }
-	    
-	    // then draw the preview
-	    // this.handleBrush will use this.lastHover to revert
-	    // this preview drawing once cursor moves inside of a new cell
-	    //
-	    mymod.drawTile(coords, color, app);
-	    
-	    
-	}
+	canvas.onmouseover = (e) => {	}
 
 	//
 	// Cleanly stop showing previews when cursor leaves canvas
 	//
-	canvas.onmouseout = (e) => {
-	    //
-	    // restore the cell in lastHover then set it to null
-	    // since cursor is leaving the canvas
-	    //
-	    mymod.drawTile(mymod.lastHover.coords, mymod.lastHover.color, app);
-	    mymod.lastHover = null;
-	}
+	canvas.onmouseout = (e) => {	}
 
-	//// Handle mouse movement and click within the canvas
-	/// Handles both drawing previews + queuing and sending cell paint actions
+	//// Handle mouse movement and clicking within the canvas.
+	/// Handles both drawing previews + queuing and sending cell paint actions.
+	// Paints on click and drag.
 	//
-	// paints on click and drag
-	//
-	canvas.onmousemove = (e) => {
-	    this.handleBrush(e, app);
-	}
+	canvas.onmousemove = (e) => {	}
 	//
 	// paints on stationary click
 	//
-	canvas.onclick = (e) => {
-	    this.handleBrush(e, app, true);
-	}
+	canvas.onclick = (e) => {	}
 
-    }
-
-    onConnectionStable(app, peer) {
-	console.log("Connection Stable");
-	let mymod = app.modules.returnModule("Graffiti");
     }
     
-    initializeCanvas(tileSize, tilesWide, tilesTall) {
-	document.body.appendChild(document.createElement('canvas'));
-	let canvas = document.getElementsByTagName('canvas')[0];
-	this.canvas = canvas;
-	this.tileSize = tileSize;
-	
-	canvas.width = tileSize * tilesWide;
-	canvas.height = tileSize * tilesTall;
-	canvas.style.display = 'block';
-	canvas.style.margin  = ' 0 auto';
+    initializeCanvas(tilesWide, tilesTall) {
+	let canv_div = document.getElementById("canvas-container")
 
-	let ctx = canvas.getContext('2d');
+	canv_div.innerHTML += `<canvas id="cnv"></canvas`;
+	this.canvas = document.getElementById("cnv")
+	
+	console.log("canvas ", this.canvas);
+	
+	this.canvas.width  = Math.floor(window.innerWidth  * (0.5));
+	this.canvas.height = Math.floor(window.innerHeight * (0.5));
+
+	this.shift = [0, 0];
+	this.zoom_factor = 1;
+	
+	let ctx = this.canvas.getContext('2d', {alpha: false});
+	this.ctx = ctx;
+	
 	ctx.fillStyle = "#ffffff";
-	ctx.fillRect(0, 0, canvas.width, canvas.height);
+	ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
 //      grid has bug -- needs to be redrawn after cell is drawn or it dissapears
 //	this.drawGrid(tileSize, canvas.width, canvas.height);
@@ -348,7 +497,7 @@ class Graffiti extends ModTemplate {
     // dont use grid
     drawGrid(size, width, height) {
 	let canvas = this.canvas;
-	let ctx = canvas.getContext('2d');
+	let ctx = this.ctx;
 
 	for (let i = 0; i <= width; i += size) {
 	    ctx.moveTo(i, 0);
@@ -365,41 +514,17 @@ class Graffiti extends ModTemplate {
 	}
     }
 
-    drawHourGlass(coords) {
-	let canvas = this.canvas;
-	let ctx = canvas.getContext('2d');
-
-	let pad = 10;
-	let x = coords[0] + pad;
-	let y = coords[1] + pad;
-	let size = this.tileSize - pad;
-
-	ctx.lineWidth = 2;
-	ctx.strokeStyle = "black";
-	
-//	ctx.beginPath();
-	ctx.moveTo(x, y);
-	ctx.lineTo(x + size, y);
-	ctx.lineTo(x, y + size);
-	ctx.lineTo(x + size, y + size);
-	ctx.lineTo(x, y);
-	ctx.stroke();
-
-    }
-
-    setLastHover(coords, color) {
-	this.lastHover = {'coords': coords,
-			   'color' : mymod.getColor(coords)
-			 }
-    }
 
     queueTile(event, app) {
 	// get coordinates of mouse click relative to canvas
 	let mymod = app.modules.returnModule("Graffiti");
 	let rect = mymod.canvas.getBoundingClientRect();
-	let coords = [event.clientX - rect.left,
-		      event.clientY - rect.top]
-	
+//	let coords = [event.clientX - rect.left,
+//		      event.clientY - rect.top]
+//	let coords = getTileCoords(mymod.canvas, event, mymod.cellSize, mymod.scale);
+	let coords = getTileCoords(mymod.canvas,
+				   [event.clientX, event.clientY],
+				   mymod.cellSize, mymod.scale);
 	// transform real numbered coords into top left corner of cell those coords reside in
 	coords = coords.map(t => Math.floor(t));
 	coords = coords.map(t => t - (t % mymod.tileSize));
@@ -436,89 +561,8 @@ class Graffiti extends ModTemplate {
 	}
     }
 
-    drawTile(coords, color, app) {
-	let mymod = app.modules.returnModule("Graffiti");
-	let ctx = this.canvas.getContext('2d');
-	// whiteout cell
-	ctx.fillStyle = "#ffffff";
-	ctx.fillRect(coords[0], coords[1], this.tileSize, this.tileSize);
-	// then draw color in
-	ctx.fillStyle = color;
-	ctx.fillRect(coords[0], coords[1], this.tileSize, this.tileSize);
-    }
-    
-    //
-    // draws preview on cursor hover + builds and sends user paint queues
-    //
-    handleBrush(event, app, tapped=false) {
-	let mymod = app.modules.returnModule("Graffiti");
-	// get coordinates of cursor relative to canvas
-	let coords = getTileCoords(mymod.canvas, event, mymod.tileSize)
-	let color  = document.getElementById("favcolor").value;
-	let newTile = false;
-	let newColor = false;
 
-	// check to see if non-null lastHover shares color or position with current
-	// cell cursor is moving within
-	//
-	// if lastHover is null or same color and position this function does nothing
-	//
-	if (mymod.lastHover) {
-	    newTile = JSON.stringify(coords) != JSON.stringify(mymod.lastHover['coords']);
-	    newColor = color.slice(0, 7) != mymod.lastHover['color'].slice(0, 7);
-	}
-	else { return; }
-
-	let clicked = mymod.leftButtonDown || tapped;
-	
-	//
-	// if cursor over new tile, or user is painting currently hovered cell
-	//
-	if (newTile || (newColor && clicked) ) {
-
-	    // save the old color for later before drawing over it
-	    let ctx = mymod.canvas.getContext('2d');
-	    let oldColor = mymod.getColor(coords);
-
-	    // if clicked, then paint data will be sent to chain
-	    //
-	    if (newColor && clicked) {
-		// oldColor is now the painted color
-		// function queues up cell position and color data
-		oldColor = mymod.queueTile(event, app);
-		
-		// if mouse was tapped once instead of dragged
-		//
-		if (tapped) {
-		    // then send the queue (single coord+color combo)
-		    mymod.sendQueueTx(app);
-		}
-		// 
-		// otherwise the queue is sent when mouse is dragged
-		// inside the document.onmouseup event
-	    }
-
-	    // if no click, then don't paint, but draw the preview
-	    // and restore the true color of the last cell hovered over
-	    //
-	    else {
-		// draw preview over cnurrently hovered cell
-		mymod.drawTile(coords, color, app);
-		// replace previous hovered cell's true color
-		// mymod.drawTile(mymod.lastHover['coords'], mymod.lastHover['color']);
-	    }
-	    
-	    // replace previous hovered cell's true color
-	    if (newTile) {
-		mymod.drawTile(mymod.lastHover['coords'], mymod.lastHover['color'], app);
-	    }
-	    
-	    // Set currently hovered tile as lastHover so we can do it all over again
-	    mymod.lastHover = {'coords': coords,
-			       'color' : oldColor
-			      }
-	}
-    }
 }
 
 module.exports = Graffiti;
+
