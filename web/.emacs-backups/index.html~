@@ -29,15 +29,54 @@
   </head>
   <body>
 
-    <label for="favcolor">Select your favorite color:</label>
-    <input type="color" id="favcolor" name="favcolor" value="#ff0000"> 
-
+    <div id="color-bar">
+    <label for="favcolor"></label>
+    <input type="color" id="favcolor" name="favcolor" value="#f71f3d">
+    
+    <input class="color-button" type="button" value="#ffffff">
+    <input class="color-button" type="button" value="#ffffff">
+    <input class="color-button" type="button" value="#ffffff">
+    
+    </div>
+    <div id="canvas-container">
+    </div>
+    
     <!-- saito load animation -->
-    <script src="/saito/lib/lottie/lottie_light.min.js"></script>
-    <div id="lottie"></div>
-    <script src="/saito/scripts/lottie-animate.js"></script>
+    <!-- <script src="/saito/lib/lottie/lottie_light.min.js"></script> -->
+    <!-- <div id="lottie"></div> -->
+    <!-- <script src="/saito/scripts/lottie-animate.js"></script> -->
+
 
     <script type="text/javascript" src="/saito/saito.js" id="saito"></script>
 
   </body>
 </html>
+
+<style>
+  #canvas-container {
+      margin-left: auto;
+      margin-right: auto;
+  }
+  canvas {
+      border: solid 3px black;
+      cursor: none;
+      position: absolute;
+      top: 25%;
+      bottom: 25%;
+      left: 25%;
+      right: 25%;
+      transition: 50ms;
+  }
+  body {
+  }
+  #color-bar {position: fixed;
+	      top: 0;
+	      z-index: 100;}
+  .color-button {
+      border: 1px black; !important
+      background-color: #ffffff;
+      height: 59px;
+      width: 59px;
+      cursor: pointer;
+  }
+</style>

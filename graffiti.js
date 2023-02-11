@@ -123,7 +123,7 @@ class Graffiti extends ModTemplate {
 	    mymod.canvas.width = Math.floor(window.innerWidth * 0.5);
 	    mymod.canvas.height = Math.floor(window.innerHeight * 0.5);
 	    
-	    mymod.reDraw();
+	    mymod.reDrawing = true;
 	}
 	
 	// MOUSEMOVE EVENT
@@ -140,14 +140,18 @@ class Graffiti extends ModTemplate {
 	    var color =  "#00ff00";
 	    var tile_coords = coords.map(t => Math.floor(t / mymod.zoom_factor));
 	    mymod.currentTiles[tile_coords] = color;
+	    mymod.renderQueue.push(tile_coords);
+	    console.log("CLICK EVENT COORDS: ", tile_coords);
+	    /*
 	    var ctx = mymod.ctx;
 	    ctx.fillStyle = color;
 	    ctx.fillRect(coords[0], coords[1], mymod.zoom_factor, mymod.zoom_factor);
-	    
+
 	    console.log(c);
 	    console.log(mymod.zoom_factor);
 	    console.log(tile_coords);
 	    console.log(mymod.currentTiles);
+	    */
 	});
 
 	document.addEventListener("wheel", function (e) {
@@ -157,7 +161,7 @@ class Graffiti extends ModTemplate {
 	    else {
 		mymod.zoom_factor--;
 	    }
-	    mymod.reDraw();
+	    mymod.reDrawing = true;;
 	});
 
 	// END HTML EVENTS ////////////////////////////////////////////////////////////
@@ -191,19 +195,40 @@ class Graffiti extends ModTemplate {
 
 
 	// this should be done outside this loop function
-	
-	let ctx = this.ctx;
+
 
 	// if entire canvas must be redraw, clear it first
 	if (this.reDrawing) {
-	    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+	    this.reDraw();
 	}
-	console.log(renderQueue);
+
+	// if renderQueue empty, do nothing, move on to next
+	// loop iteration
+	if (this.renderQueue.length == 0) {
+	    return requestAnimationFrame(()=>this.canvas_loop());
+	}
+	console.log("drawing");
+
+
 	for (var i = 0; i < this.renderQueue.length; i++) {
-	    var coords = this.renderQueue[i][0].map(t => t * this.zoom_factor);
-	    var color =  this.renderQueue[i][1];
-	    ctx.fillStyle = color;
-	    ctx.fillRect(coords[0], coords[1], this.tileSize, this.tileSize);
+//	    var coords = this.renderQueue[i][0].map(t => t * this.zoom_factor);
+	    //	    var color =  this.renderQueue[i][1];
+
+
+	    // coords is where the canvas will be painted
+	    // but the "real" coords stay unmodified in this.renderQueue
+	    var coords = this.renderQueue[i].map(t => t * this.zoom_factor);
+	    if (this.reDrawing == false) {
+		console.log("LOOP COORDS: ", coords);
+		console.log("COLOR: ", this.currentTiles[coords]);
+	    }
+	    if (this.currentTiles[this.renderQueue[i]] == null) {continue;}
+	    var color =  this.currentTiles[this.renderQueue[i]];
+	    this.ctx.fillStyle = color;
+	    this.ctx.fillRect(coords[0], coords[1], this.zoom_factor, this.zoom_factor);
+	    console.log("DRAWING: ----------------------");
+	    console.log("(x, y) : ", coords);
+	    console.log("Size   : ", this.zoom_factor);
 	}
 
 	
@@ -215,7 +240,10 @@ class Graffiti extends ModTemplate {
 
     // 
     reDraw() {
-	this.reDrawing = true;
+	console.log("reDrawing");
+
+	let ctx = this.ctx;
+	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 	this.renderQueue = [];
 
 	// TODO
@@ -228,11 +256,16 @@ class Graffiti extends ModTemplate {
 	let height = Math.ceil(this.canvas.height / this.zoom_factor);
 	//
 	
-	for (var i = 0; i++; i <= width) {
-	    for (var j = 0; j++; j <=height) {
+	for (var i = 0; i < width; i++) {
+	    for (var j = 0; j < height; j++) {
 		this.renderQueue.push([i,j]);
 	    }
 	}
+	console.log("Width: ", width);
+	console.log("Height: ", height);
+	console.log("zoom_factor: ", this.zoom_factor);
+	console.log("renderQueue: ", this.renderQueue);
+	console.log("currentTiles: ", this.currentTiles);
     }
 
     draw_tile(coords, color="#ffffff") {
