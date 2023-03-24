@@ -227,9 +227,9 @@ class Graffiti extends ModTemplate {
 	translate[1] = unscaled_translate[1] + center[1] / scale;
 
 	const x_str = `${translate[0]}px,`;
-	const y_str = `${translate[1]}px,`;
+	const y_str = `${translate[1]}px)`;
 
-	canvas.style.webkitTransform = `scale(${scale}) translate3d(${x_str}${y_str}0px)`;
+	canvas.style.webkitTransform = `scale(${scale}) translate(${x_str}${y_str}`;
 
 /*
 // handwritten
