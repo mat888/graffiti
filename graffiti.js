@@ -84,18 +84,28 @@ class Graffiti extends ModTemplate {
 	this.categories  = "Dev Utilities";
 
 	
-	app.keys.addKey( this.appPubKey , {watched: true});
-
+//	app.keys.addKey( this.appPubKey , {watched: true});
+	app.keychain.addKey(this.appPubKey, {watched: true});
+	
 	return this;
     }
 
+
+/*
+    propagateKeylist() {
+	let keys = this.app.keychain.returnMatchedPublicKeys();
+	this.peers.forEach((peer) => {
+	    this.sendRequest("SKEYLIST", Buffer.from(JSON.stringify(keys)), peer);
+	});
+    }
+*/
     initializeHTML(app) {
 	console.log("initializing html...");
 
 	// (cellSize (in pixels), cellsWide, cellsTall);
 	// cellSize should be at least 40 to prevent blur
 	this.initializeCanvas(10, 400, 400);
-
+	this.app.network.propagateKeylist();
 	// This is how the browser gets up to date canvas from node on startup
 	for (const [key, value] of Object.entries(this.currentTiles)) {
 	    console.log(key, value);
@@ -151,7 +161,7 @@ class Graffiti extends ModTemplate {
 	    let coords = queue[i][0];
 	    let color  = queue[i][1];
 
-	    console.log(coords, color);
+//	    console.log(coords, color);
 	    
 	    // update tiles dictionary
 	    mymod.currentTiles[String(coords)] = color;
@@ -557,10 +567,13 @@ class Graffiti extends ModTemplate {
     handleBrush(coords, app, tapped=false) {
 	let mymod = app.modules.returnModule("Graffiti");
 	// get coordinates of cursor relative to canvas
-//	let coords = getTileCoords(mymod.canvas, event, mymod.tileSize, mymod.scale)
+	//	let coords = getTileCoords(mymod.canvas, event, mymod.tileSize, mymod.scale)
+
+
 	coords = getTileCoords(mymod.canvas,
 			       [coords[0], coords[1]],
 			       mymod.tileSize, mymod.scale)
+
 	let color  = document.getElementById("favcolor").value;
 	let newTile = false;
 	let newColor = false;
@@ -620,7 +633,7 @@ class Graffiti extends ModTemplate {
 		mymod.drawTile(mymod.lastHover['coords'], mymod.lastHover['color'], app);
 	    }
 	    
-	    // Set currently hovered tile as lastHover so we can do it all over again
+	    // Finally, set currently hovered tile as lastHover
 	    mymod.lastHover = {'coords': coords,
 			       'color' : oldColor
 			      }
