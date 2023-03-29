@@ -25,6 +25,23 @@ function tooWhite(color) {
     
 }
 
+function fadeColor(hexColor, fadeAmount) {
+  // convert hex color string to RGB values
+  const red = parseInt(hexColor.slice(1, 3), 16);
+  const green = parseInt(hexColor.slice(3, 5), 16);
+  const blue = parseInt(hexColor.slice(5, 7), 16);
+
+  // calculate new RGB values with fade amount
+  const newRed = Math.floor(red + (255 - red) * fadeAmount);
+  const newGreen = Math.floor(green + (255 - green) * fadeAmount);
+  const newBlue = Math.floor(blue + (255 - blue) * fadeAmount);
+
+  // convert new RGB values back to hex color string
+  const newHexColor = `#${newRed.toString(16)}${newGreen.toString(16)}${newBlue.toString(16)}`;
+
+  return newHexColor;
+}
+
 // given any point on the canvas, find the coordinates of
 // the tile those coordinates reside within
 function getTileCoords(canvas, event, cellSize, zoom) {
@@ -149,20 +166,20 @@ class Graffiti extends ModTemplate {
     async onConfirmation(blk, tx, conf, app) {
 	if (conf > 0) { return; }
 	//	this.receiveQueueTx(tx);
-	console.log("past if");
+
 	let txmsg = tx.returnMessage();
 	let queue = txmsg.tiles;
 	let mymod = app.modules.returnModule("Graffiti");
 	
 	// TODO
 	// check if coords and color are valid before saving or drawing
+
+	// for every tile in the queue from the tx
 	for (let i = 0; i < queue.length; i++) {
 
 	    let coords = queue[i][0];
 	    let color  = queue[i][1];
 
-//	    console.log(coords, color);
-	    
 	    // update tiles dictionary
 	    mymod.currentTiles[String(coords)] = color;
 	    
@@ -321,19 +338,15 @@ class Graffiti extends ModTemplate {
 	document.addEventListener("keyup", (e) => {
 	    switch(dirKeys[e.key]) {
 	    case 0:
-		console.log("key up: ", e.key, dirKeys[e.key]);
 		mymod.moveUp = false;
 		break;
 	    case 2:
-		console.log("key up: ", e.key, dirKeys[e.key]);
 		mymod.moveDown = false
 		break;
 	    case 3:
-		console.log("key up: ", e.key, dirKeys[e.key]);
 		mymod.moveLeft = false;
 		break;
 	    case 1:
-		console.log("key up: ", e.key, dirKeys[e.key]);
 		mymod.moveRight = false;
 	break;
 	    }
@@ -493,6 +506,9 @@ class Graffiti extends ModTemplate {
     }
 
     queueTile(event, app) {
+	// TODO: this recalculates a lot of values it doesn't need to
+	// pass them as arguments instead, like coords to the tile 
+	
 	// get coordinates of mouse click relative to canvas
 	let mymod = app.modules.returnModule("Graffiti");
 	let rect = mymod.canvas.getBoundingClientRect();
@@ -510,7 +526,7 @@ class Graffiti extends ModTemplate {
 	let color = document.getElementById("favcolor").value;
 
 	// preview color is washed out
-	let semiColor = color + "80"
+	let semiColor = fadeColor(color, 0.5);
 
 	// if color is too white
 	if (color[1] == "f" && color[3] == "f" && color[5] == "f") {
@@ -518,6 +534,7 @@ class Graffiti extends ModTemplate {
 	    console.log("too white!")
 	    semiColor = color + "b0";
 	}
+
 
 	mymod.drawTile(coords, semiColor, app);
 	mymod.currentTiles[String(coords)] = semiColor;
@@ -614,8 +631,8 @@ class Graffiti extends ModTemplate {
 		    mymod.sendQueueTx(app);
 		}
 		// 
-		// otherwise the queue is sent when mouse is dragged
-		// inside the document.onmouseup event
+		// otherwise the queue is sent when mouse is dragged -
+		// this is done inside the document.onmouseup event
 	    }
 
 	    // if no click, then don't paint, but draw the preview
@@ -634,6 +651,7 @@ class Graffiti extends ModTemplate {
 	    }
 	    
 	    // Finally, set currently hovered tile as lastHover
+
 	    mymod.lastHover = {'coords': coords,
 			       'color' : oldColor
 			      }
