@@ -97,25 +97,72 @@ class Graffiti extends ModTemplate {
 	this.currentTiles = {};
 	this.renderQueue  = [];
 	
-	this.description = "A debug configuration dump for Saito";
-	this.categories  = "Dev Utilities";
-
-	
-//	app.keys.addKey( this.appPubKey , {watched: true});
-	app.keychain.addKey(this.appPubKey, {watched: true});
-	
 	return this;
     }
 
 
-/*
-    propagateKeylist() {
-	let keys = this.app.keychain.returnMatchedPublicKeys();
-	this.peers.forEach((peer) => {
-	    this.sendRequest("SKEYLIST", Buffer.from(JSON.stringify(keys)), peer);
-	});
+    //
+    // this function runs the FIRST time that Saito is initialized. here we add the 
+    // publickey to which our Graffiti transactions are sent to our keychain so that 
+    // peers will send us blocks containing updates.
+    //
+    installModule(app) {
+      //
+      // add the publickey for the graffiti module to our keychain as a "watched" address
+      //
+      this.app.keychain.addKey(this.appPubKey, {watched: true});
     }
-*/
+
+    //
+    // when peers connect to each other, they share an array of "services" they support.
+    // implementing this function will allow us to know which peers are running which 
+    // version of the graffiti module when they connect.
+    //
+    returnServices() {
+      return [{ service: "graffiti", appPubKey: this.appPubKey}];
+    }
+
+    //
+    // this function runs whenever we connect to a peer. in this case, if the peer is
+    // running a copy of THIS Graffiti application with THIS Graffiti publickey, we want
+    // to query it for the current state of the tileset.
+    // 
+    onPeerServiceUp(app, peer, service) {
+      if (service.service === "graffiti") {
+	if (service.appPubKey === this.appPubKey) {
+	  let mymod = app.modules.returnModule("Graffiti");
+	  let sql = `SELECT * FROM tiles;`;
+	  let color;
+	  let coords;
+	  this.sendPeerDatabaseRequestWithFilter("Graffiti", sql, (res) => {
+	    console.log("fetching initial tiles values from full node");
+            if (res.rows) {
+	      res.rows.map((row) => {
+                //
+	        // each row here
+                //
+	        coords = JSON.parse(row["coords"]);
+	        color  = row["color"];
+	        mymod.drawTile(coords, color, app);
+	        mymod.currentTiles[coords] = color;
+	      });
+            }
+	  });
+	  if (mymod.lastHover) {
+	    if (String(mymod.lastHover["coords"]) == String(coords)) {
+	      console.log("changing lastHover");
+	      mymod.lastHover["color"] = color;
+	    }
+	  }
+        }
+      }
+    }
+
+
+
+    //
+    //
+    //
     initializeHTML(app) {
 	console.log("initializing html...");
 
@@ -137,32 +184,6 @@ class Graffiti extends ModTemplate {
 	
     }
 
-    onPeerHandshakeComplete(app) {
-	let mymod = app.modules.returnModule("Graffiti");
-	let sql = `SELECT * FROM tiles;`;
-	let color;
-	let coords;
-	this.sendPeerDatabaseRequestWithFilter("Graffiti", sql, (res) => {
-	    console.log("fetching initial tiles values from full node");
-            if (res.rows) {
-		res.rows.map((row) => {
-                    //
-		    // each row here
-                    //
-		    coords = JSON.parse(row["coords"]);
-		    color  = row["color"];
-		    mymod.drawTile(coords, color, app);
-		    mymod.currentTiles[coords] = color;
-		});
-            }
-	});
-	if (mymod.lastHover) {
-	    if (String(mymod.lastHover["coords"]) == String(coords)) {
-		console.log("changing lastHover");
-		mymod.lastHover["color"] = color;
-	    }
-	}
-    }
     async onConfirmation(blk, tx, conf, app) {
 	if (conf > 0) { return; }
 	//	this.receiveQueueTx(tx);
