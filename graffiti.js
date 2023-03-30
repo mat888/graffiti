@@ -1,10 +1,6 @@
-// TODO:
-
-// pending white color is white - therefore unclear
-
-var saito = require('../../lib/saito/saito');
-var ModTemplate = require('../../lib/templates/modtemplate');
-const GraffitiAppspaceMain = require('./lib/appspace/main');
+const saito = require('../../lib/saito/saito');
+const ModTemplate = require('../../lib/templates/modtemplate');
+const GraffitiUI = require('./lib/ui/main');
 
 
 // These two functions read canvas pixel data and return a HEX color
