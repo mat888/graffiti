@@ -36,11 +36,11 @@ class Graffiti extends ModTemplate {
     // publickey to which our Graffiti transactions are sent to our keychain so that 
     // peers will send us blocks containing updates.
     //
-    installModule(app) {
+    async installModule(app) {
       //
       // make sure modTemplate can add any hooks its needs for database support, etc.
       //
-      super.installModule(app);
+      await super.installModule(app);
       //
       // add the publickey for the graffiti module to our keychain as a "watched" address
       //
@@ -124,7 +124,7 @@ class Graffiti extends ModTemplate {
       try {
         if (conf == 0) { 
           if (txmsg.request === "graffiti queue") {
-            graffiti_mod.receiveQueueTransaction(blk, tx, conf, app);
+            await graffiti_mod.receiveQueueTransaction(blk, tx, conf, app);
           }
         }
       } catch (err) {
@@ -149,7 +149,7 @@ class Graffiti extends ModTemplate {
 
     }
 
-    receiveQueueTransaction(blk, tx, conf, app) {
+    async receiveQueueTransaction(blk, tx, conf, app) {
 
       let txmsg = tx.returnMessage();
       let queue = txmsg.tiles;
