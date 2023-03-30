@@ -1,6 +1,6 @@
 const saito = require('../../lib/saito/saito');
 const ModTemplate = require('../../lib/templates/modtemplate');
-const GraffitiUI = require('./lib/ui/main');
+const GraffitiUi = require('./lib/ui/main');
 
 
 // These two functions read canvas pixel data and return a HEX color
@@ -61,8 +61,8 @@ function getTileCoords(canvas, event, cellSize, zoom) {
 class Graffiti extends ModTemplate {
 
     constructor(app) {
+
 	super(app);
-	super.initialize(app);
 	
 	this.app         = app;
 	this.name        = "Graffiti";
@@ -72,6 +72,11 @@ class Graffiti extends ModTemplate {
 	this.categories  = "Utilities Core";
 	this.icon	 = "fas fa-code";
 	
+	//
+	// UI components
+	//
+	this.graffiti_ui = new GraffitiUi(this.app, this, "");
+
 	this.canvas         = "UNSET CANVAS";
 	this.cellSize       = 10;
 	this.lastHover      = null;
@@ -104,10 +109,22 @@ class Graffiti extends ModTemplate {
     //
     installModule(app) {
       //
+      // make sure modTemplate can add any hooks its needs for database support, etc.
+      //
+      super.installModule(app);
+      //
       // add the publickey for the graffiti module to our keychain as a "watched" address
       //
       this.app.keychain.addKey(this.appPubKey, {watched: true});
     }
+
+    //
+    // initialize
+    //
+    initialize(app) {
+      super.initialize(app);
+    }
+
 
     //
     // when peers connect to each other, they share an array of "services" they support.
@@ -160,7 +177,11 @@ class Graffiti extends ModTemplate {
     //
     //
     initializeHTML(app) {
+
 	console.log("initializing html...");
+
+	this.graffiti_ui.render();
+
 
 	// (cellSize (in pixels), cellsWide, cellsTall);
 	// cellSize should be at least 40 to prevent blur
